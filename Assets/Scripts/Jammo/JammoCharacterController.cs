@@ -1,6 +1,8 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 [RequireComponent(typeof(Rigidbody))]
 public class JammoCharacterController : MonoBehaviour
@@ -12,6 +14,8 @@ public class JammoCharacterController : MonoBehaviour
     [SerializeField] private JammoCharacterStats stats; 
     [SerializeField] private List<GameObject> balls = new List<GameObject>();
     [SerializeField] private List<GameObject> goals = new List<GameObject>();
+    [SerializeField] private CameraController cameraController;
+    [SerializeField, Min(0f)] private float cameraRetargetDelay = 2f;
 
     private JammoCharacterStates _states;
 
@@ -48,7 +52,48 @@ public class JammoCharacterController : MonoBehaviour
             characterObject = transform.GetChild(0).gameObject;
         }
 
+        if (cameraController == null)
+        {
+            cameraController = FindFirstObjectByType<CameraController>();
+        }
+
         _ = Stats;
+    }
+
+    private void OnEnable()
+    {
+        foreach (GoalController goalController in FindObjectsByType<GoalController>(FindObjectsSortMode.None))
+        {
+            goalController.OnGoalEntered += HandleGoalEntered;
+        }
+    }
+
+    private void OnDisable()
+    {
+        foreach (GoalController goalController in FindObjectsByType<GoalController>(FindObjectsSortMode.None))
+        {
+            goalController.OnGoalEntered -= HandleGoalEntered;
+        }
+    }
+
+    private void HandleGoalEntered(Collider other)
+    {
+        if (cameraController == null)
+        {
+            return;
+        }
+
+        StartCoroutine(RetargetCameraToCharacter());
+    }
+
+    private IEnumerator RetargetCameraToCharacter()
+    {
+        yield return new WaitForSeconds(cameraRetargetDelay);
+
+        if (cameraController != null)
+        {
+            cameraController.SetTarget(transform);
+        }
     }
 
     private void FixedUpdate()
@@ -74,6 +119,11 @@ public class JammoCharacterController : MonoBehaviour
     public void AutoKick()
     {
         ExecuteKick(FindFarthest, FindNearest);
+    }
+
+    public void ResetScene()
+    {
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 
     private void ExecuteKick(
@@ -115,6 +165,11 @@ public class JammoCharacterController : MonoBehaviour
         }
 
         ballBody.AddForce(kickDirection.normalized * Stats.KickForce.Value, ForceMode.Impulse);
+
+        if (cameraController != null)
+        {
+            cameraController.SetTarget(ball.transform);
+        }
     }
 
     private static GameObject FindNearest(List<GameObject> candidates, Vector3 fromPosition)

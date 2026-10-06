@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 [RequireComponent(typeof(Rigidbody))]
@@ -8,7 +9,9 @@ public class JammoCharacterController : MonoBehaviour
 
     [SerializeField] private Rigidbody body;
     [SerializeField] private GameObject characterObject;
-    [SerializeField] private JammoCharacterStats stats;
+    [SerializeField] private JammoCharacterStats stats; 
+    [SerializeField] private List<GameObject> balls = new List<GameObject>();
+    [SerializeField] private List<GameObject> goals = new List<GameObject>();
 
     private JammoCharacterStates _states;
 
@@ -61,6 +64,109 @@ public class JammoCharacterController : MonoBehaviour
     public void Move(Vector3 direction)
     {
         States.MoveDirection.Set(direction);
+    }
+
+    public void Kick()
+    {
+        ExecuteKick(FindNearest, FindNearest);
+    }
+
+    public void AutoKick()
+    {
+        ExecuteKick(FindFarthest, FindNearest);
+    }
+
+    private void ExecuteKick(
+        Func<List<GameObject>, Vector3, GameObject> ballFinder,
+        Func<List<GameObject>, Vector3, GameObject> goalFinder)
+    {
+        GameObject ball = ballFinder(balls, transform.position);
+
+        if (ball == null)
+        {
+            return;
+        }
+
+        GameObject goal = goalFinder(goals, ball.transform.position);
+
+        if (goal == null)
+        {
+            return;
+        }
+
+        Rigidbody ballBody = ball.GetComponent<Rigidbody>();
+
+        if (ballBody == null)
+        {
+            ballBody = ball.GetComponentInParent<Rigidbody>();
+        }
+
+        if (ballBody == null)
+        {
+            return;
+        }
+
+        Vector3 kickDirection = goal.transform.position - ball.transform.position;
+        kickDirection.y = 0f;
+
+        if (kickDirection.sqrMagnitude <= DirectionEpsilon)
+        {
+            return;
+        }
+
+        ballBody.AddForce(kickDirection.normalized * Stats.KickForce.Value, ForceMode.Impulse);
+    }
+
+    private static GameObject FindNearest(List<GameObject> candidates, Vector3 fromPosition)
+    {
+        GameObject nearest = null;
+        float nearestSqrDistance = float.PositiveInfinity;
+
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            GameObject candidate = candidates[i];
+
+            if (candidate == null)
+            {
+                continue;
+            }
+
+            float sqrDistance = (candidate.transform.position - fromPosition).sqrMagnitude;
+
+            if (sqrDistance < nearestSqrDistance)
+            {
+                nearestSqrDistance = sqrDistance;
+                nearest = candidate;
+            }
+        }
+
+        return nearest;
+    }
+
+    private static GameObject FindFarthest(List<GameObject> candidates, Vector3 fromPosition)
+    {
+        GameObject farthest = null;
+        float farthestSqrDistance = float.NegativeInfinity;
+
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            GameObject candidate = candidates[i];
+
+            if (candidate == null)
+            {
+                continue;
+            }
+
+            float sqrDistance = (candidate.transform.position - fromPosition).sqrMagnitude;
+
+            if (sqrDistance > farthestSqrDistance)
+            {
+                farthestSqrDistance = sqrDistance;
+                farthest = candidate;
+            }
+        }
+
+        return farthest;
     }
 
     private void RotateCharacter(Vector3 direction)
